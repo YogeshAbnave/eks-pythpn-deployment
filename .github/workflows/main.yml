@@ -62,7 +62,7 @@ jobs:
       - name: Update K8s Manifests
         run: |
           cat deploy/deploy.yaml
-          sed -i "s|image: 1nfosecsingh/demo-app:.*|image: yogeshabnave/demo-app:${{ env.VERSION }}|g" deploy/deploy.yaml
+          sed -i "s|image: yogeshabnave/demo-app:.*|image: yogeshabnave/demo-app:${{ env.VERSION }}|g" deploy/deploy.yaml
           cat deploy/deploy.yaml
 
       # Update Github
@@ -72,10 +72,10 @@ jobs:
           git config --global user.name "YogeshAbnave"
           git add deploy/deploy.yaml
           git commit -m "Update deploy.yaml with new image version - ${{ env.VERSION }}"
-          git remote set-url origin https://github-actions:${{ secrets.GITHUB_TOKEN }}@github.com/infosecsingh/Flask-App-GitHub-Actions-ArgoCD.git
+          git remote set-url origin https://github-actions:${{ secrets.GITHUB_TOKEN }}@github.com/YogeshAbnave/eks-pythpn-deployment.git
           git push origin main
 
-      
+      # https://github.com/YogeshAbnave/eks-pythpn-deployment.git
 
 
         
