@@ -1,7 +1,14 @@
-import json, logging, math, random, time, base64
+import json
+import logging
+import math
+import random
+import time
+import base64
 from io import BytesIO
 
-import boto3, numpy as np, streamlit as st
+import boto3
+import numpy as np
+import streamlit as st
 from PIL import Image
 from botocore.exceptions import ClientError
 from components.Parameter_store import S3_BUCKET_NAME
@@ -30,10 +37,8 @@ st.session_state.setdefault("reading_material", None)
 # Method to call the foundation model
 def query_generate_questions_answers_endpoint(input_text):
     prompt = f"{input_text}\n Using the above context, please generate five questions and answers you could ask students about this information CloudAge."
-    prompt = (
-        prompt
-        + "\nFormat the output as a list of five JSON objects containing the keys: Id, Question, and Answer"
-    )
+    prompt = (prompt +
+              "\nFormat the output as a list of five JSON objects containing the keys: Id, Question, and Answer")
     input_data = {
         "inferenceConfig": {"max_new_tokens": 1000},
         "messages": [{"role": "user", "content": [{"text": prompt}]}],
@@ -57,7 +62,6 @@ def query_generate_questions_answers_endpoint(input_text):
 
 # method to call the Titan image foundation model
 def query_generate_image_endpoint(input_text):
-    seed = np.random.randint(1000)
     input_body = json.dumps(
         {
             "taskType": "TEXT_IMAGE",
@@ -146,11 +150,9 @@ st.markdown("# Create Assignments")
 st.sidebar.header("Input text to create assignments")
 
 text = st.text_area("Input Text", key="input_text")
-if (
-    text
-    and text != st.session_state.get("last_processed_input_text", None)
-    and text != "None"
-):
+if (text and
+        text != st.session_state.get("last_processed_input_text", None) and
+        text != "None"):
     try:
         if image_model_id != "<model-id>":
             image = query_generate_image_endpoint(text)
@@ -231,7 +233,7 @@ if st.button("Save Question", key="btn_save_question"):
                 assignment_id, text, object_name, questions_answers
             )
             st.success(
-                f"Assignment created and saved successfully with ID: {assignment_id}"
+                "Assignment created and saved successfully with ID: {}".format(assignment_id)
             )
 
         except Exception as ex:

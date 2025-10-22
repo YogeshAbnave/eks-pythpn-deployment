@@ -9,11 +9,11 @@ def setup_page(title: str, icon: str = "🌐", layout: str = "wide") -> None:
 def hide_streamlit_chrome() -> None:
     """Hide Streamlit main menu and footer."""
     html = """
-	    <style>
-	        #MainMenu {visibility: hidden;}
-	        footer{ visibility: hidden;}
-	    </style>
-	"""
+        <style>
+            #MainMenu {visibility: hidden;}
+            footer{ visibility: hidden;}
+        </style>
+    """
     st.markdown(html, unsafe_allow_html=True)
 
 

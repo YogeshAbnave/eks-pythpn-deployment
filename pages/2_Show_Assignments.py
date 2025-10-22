@@ -28,7 +28,7 @@ def download_image(image_name, file_name):
 
 
 # Page configuration
-st.set_page_config(page_title="Show Assignment",  page_icon=":bar_chart:", layout="wide")
+st.set_page_config(page_title="Show Assignment", page_icon=":bar_chart:", layout="wide")
 
 # Rest of the page
 st.markdown("# Selected Assignment")
