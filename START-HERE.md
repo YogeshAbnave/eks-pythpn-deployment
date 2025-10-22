@@ -43,7 +43,17 @@ Read [DEPLOYMENT.md](DEPLOYMENT.md) for comprehensive instructions with explanat
 
 ## 📋 Prerequisites
 
-Before starting, ensure you have:
+### Option A: Automated Tool Installation (Windows)
+
+Run this PowerShell script as Administrator to install all required tools:
+
+```powershell
+.\setup-windows.ps1
+```
+
+### Option B: Manual Installation
+
+Ensure you have:
 
 - [ ] AWS CLI installed and configured (`aws --version`)
 - [ ] kubectl installed (`kubectl version --client`)
@@ -51,6 +61,11 @@ Before starting, ensure you have:
 - [ ] Git installed (`git --version`)
 - [ ] AWS account with admin permissions
 - [ ] GitHub account
+
+**Installation guides:**
+- **eksctl**: https://eksctl.io/installation/
+- **kubectl**: https://kubernetes.io/docs/tasks/tools/
+- **AWS CLI**: https://aws.amazon.com/cli/
 
 ## 🔑 Important URLs
 
