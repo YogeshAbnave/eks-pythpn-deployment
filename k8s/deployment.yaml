@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudage-app
+  namespace: cloudage
+  labels:
+    app: cloudage-education
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cloudage-education
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: cloudage-education
+    spec:
+      serviceAccountName: cloudage-sa
+      containers:
+      - name: cloudage-container
+        image: 992167236365.dkr.ecr.us-east-1.amazonaws.com/cloudage-app:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+          protocol: TCP
+        env:
+        - name: ASSIGNMENTS_TABLE
+          valueFrom:
+            configMapKeyRef:
+              name: cloudage-config
+              key: ASSIGNMENTS_TABLE
+        - name: AWS_REGION
+          valueFrom:
+            configMapKeyRef:
+              name: cloudage-config
+              key: AWS_REGION
+        - name: BEDROCK_MODEL_ID
+          valueFrom:
+            configMapKeyRef:
+              name: cloudage-config
+              key: BEDROCK_MODEL_ID
+        - name: S3_BUCKET
+          valueFrom:
+            configMapKeyRef:
+              name: cloudage-config
+              key: S3_BUCKET
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: 500m
+            memory: 1Gi
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3

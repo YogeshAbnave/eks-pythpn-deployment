@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cloudage-config
+  namespace: cloudage
+  labels:
+    app: cloudage-education
+data:
+  ASSIGNMENTS_TABLE: "assignments"
+  AWS_REGION: "us-east-1"
+  BEDROCK_MODEL_ID: "amazon.nova-canvas-v1:0"
+  S3_BUCKET: "mcq-project"

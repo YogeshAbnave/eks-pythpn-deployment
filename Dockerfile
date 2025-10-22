@@ -1,20 +1,21 @@
-FROM python:3.14.0a3-alpine3.21
-
-# Set the working directory
+FROM public.ecr.aws/docker/library/python:3.9.18
+EXPOSE 80
 WORKDIR /app
-
-# Copy the current directory contents into the container at /app
-COPY . . 
-
-# Install any needed packages specified in requirements.txt
-RUN pip install --timeout 300 --retries 5 -r requirements.txt
-
-#Expose the port
-EXPOSE 5000
-
-# Run app.py when the container launches
-CMD ["python", "app.py"]
-
-
-
-
+COPY requirements.txt ./requirements.txt
+COPY Home.py ./Home.py
+COPY components ./components
+COPY pages ./pages
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_PROXY=* \
+    HTTP_PROXY= \
+    HTTPS_PROXY= \
+    http_proxy= \
+    https_proxy=
+RUN unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY PIP_PROXY || true \
+    && rm -f /etc/pip.conf /root/.pip/pip.conf /root/.config/pip/pip.conf || true \
+    && printf "[global]\nindex-url = https://pypi.org/simple\n" > /etc/pip.conf \
+    && pip3 install --no-cache-dir -r requirements.txt
+CMD ["streamlit","run","Home.py","--server.headless","true","--server.port","80","--server.address=0.0.0.0","--server.enableCORS","false","--browser.gatherUsageStats","false"]

@@ -1,0 +1,27 @@
+.git
+.gitignore
+README.md
+Dockerfile
+.dockerignore
+node_modules
+npm-debug.log
+.env
+*.log
+.github
+aws/
+k8s/
+argocd/
+docs/
+scripts/
+build-and-push.sh
+Build and Test Locally.md
+temp-*.png
+__pycache__
+*.pyc
+.vscode
+.idea
+.DS_Store
+quick-deploy.sh
+quick-deploy.ps1
+ecs-task.json
+commands.md

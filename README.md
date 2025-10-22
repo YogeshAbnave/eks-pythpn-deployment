@@ -1,337 +1,454 @@
-# Complete CI/CD DevOps Project 🚀
-### Deploy Python Flask App on Kubernetes cluster with GitOps Approach. 
+# CloudAge Education App - AWS EKS Deployment
 
-![alt text](imgs/arch.png)
+A GenAI-powered education platform for teachers to create assignments and students to learn English, deployed on AWS EKS with GitOps using Argo CD.
 
----
-### Workflow:
-Whenever Developer writing/changes a code and push into master/main branch, GitHub Pipeline will triggered and it will test the code with Flake8 and containerized the application with new tag and push into artifacts(dockerhub) and also GitHub Actions pipeline will update Kubernetes Manifests file with new image tag then ArgoCD will look for new changes in Manifests file and will rollout new application in kubernetes. 
+> **🚀 NEW TO THIS PROJECT?** Start with [START-HERE.md](START-HERE.md) for a quick overview and deployment guide!
+
+**GitHub Repository**: https://github.com/YogeshAbnave/eks-pythpn-deployment
+
+## 🚀 Features
+
+### For Teachers
+- Create questions from sentences using Amazon Bedrock LLMs
+- Generate images based on sentences using text-to-image models
+- Save assignments to a centralized assignment bank
+- Browse and manage all created assignments
+
+### For Students
+- Select and review assignments from the assignment bank
+- Answer questions and receive AI-powered grading
+- Get suggested word and sentence improvements
+- View leaderboard with top scores
+
+## 🏗️ Architecture
+
 ```
-│   app.py
-│   LICENSE
-│   README.md
-│   requirements.txt
-│
-├───deploy
-│       deploy.yaml
-│       svc.yaml
-│
-├───static
-│       style.css
-│
-└───templates
-        index.html
+GitHub → GitHub Actions → Amazon ECR → Argo CD → AWS EKS
+                                              ↓
+                                    DynamoDB + S3 + Bedrock
 ```
----
-#### What you will learn:
-- Git for version control
-- VS Code Editor
-- Docker for testing locally
-- Minikube for Kubernetes 1 Node Arch. 
-- GitHub for storing code
-- GitHub Actions for Continous Integrity Pipeline 
-- ArgoCD for Continous Deployment Pipeline
-- Python Application
-    - Flask Framework
-    - Flake8 Module for Linting testing  
----
-## Test Application Locally. 
-Whenever we are creating pipeline, it is best practice to test application locally.
-- Application prequisities. 
-  - Python 3.9 
-  - pip installed
 
-- Clone/Fork the Repo. 
-    ```
-    git clone https://github.com/infosecsingh/Flask-App-GitHub-Actions-ArgoCD.git
-    cd Flask-App-GitHub-Actions-ArgoCD
-    ```
-- Install Dependence
-    ```
-    pip install -r requirements.txt
-    ```
-- Run locally. 
-    ```
-    python app.py
-    ```
-- Access the application.
-    ```
-    http://localhost:5000
-    ```
+### Technology Stack
+- **Frontend**: Streamlit
+- **Backend**: Python 3.9
+- **AI/ML**: Amazon Bedrock (Nova, Titan, Mistral models)
+- **Database**: Amazon DynamoDB
+- **Storage**: Amazon S3
+- **Container Registry**: Amazon ECR
+- **Orchestration**: AWS EKS (Kubernetes)
+- **GitOps**: Argo CD
+- **CI/CD**: GitHub Actions
 
-Note: This application is running on 5000 port, but if you want to change, you can change the port in app.py script.
+## 📋 Prerequisites
 
----
-## Containerized Application.
-Before creating pipeline, test locally if your dockerfile is accurate by running container. 
-We will create Dockerfile. If you don't know what is docker, please read some basic understanding about docker: https://github.com/infosecsingh/Learn-Docker
+- AWS Account with appropriate permissions
+- AWS CLI installed and configured
+- kubectl installed
+- eksctl installed (recommended)
+- Docker installed (for local testing)
+- GitHub account
+- Git installed
 
-Write Dockerfile
+## 🎯 Quick Start - Single Push Deployment
+
+### Step 1: Clone and Setup Repository
+
+```bash
+# Clone the repository
+git clone https://github.com/YogeshAbnave/eks-pythpn-deployment.git
+cd eks-pythpn-deployment
 ```
-# Step 1: Base image
-FROM python:3.9-slim
 
-# Step 2: Set working directory
-WORKDIR /app
+### Step 2: Create AWS EKS Cluster
 
-# Step 3: Copy application code to the container
-COPY . .
+```bash
+# Create EKS cluster (takes ~15 minutes)
+eksctl create cluster \
+  --name cloudage-cluster \
+  --region us-east-1 \
+  --nodegroup-name cloudage-nodes \
+  --node-type t3.medium \
+  --nodes 2 \
+  --nodes-min 2 \
+  --nodes-max 4 \
+  --managed
 
-# Step 4: Install dependencies
-RUN pip install -r requirements.txt
-
-# Step 5: Expose the application port
-EXPOSE 5000
-
-# Step 6: Define the command to run the application
-CMD ["python", "app.py"]
+# Verify cluster
+kubectl get nodes
 ```
-#### Lets Build and Run the Container
-1. Build the Image: Run the following in the directory containing your Dockerfile:
+
+**Detailed instructions**: [docs/eks-setup.md](docs/eks-setup.md)
+
+### Step 3: Setup IAM Roles for Service Accounts
+
+```bash
+# Associate OIDC provider
+eksctl utils associate-iam-oidc-provider \
+  --cluster cloudage-cluster \
+  --region us-east-1 \
+  --approve
+
+# Create IAM policy
+aws iam create-policy \
+  --policy-name CloudAgeEKSPodPolicy \
+  --policy-document file://docs/iam-policy.json
+
+# Create service account with IAM role
+eksctl create iamserviceaccount \
+  --name cloudage-sa \
+  --namespace cloudage \
+  --cluster cloudage-cluster \
+  --region us-east-1 \
+  --attach-policy-arn arn:aws:iam::992167236365:policy/CloudAgeEKSPodPolicy \
+  --role-name cloudage-eks-pod-role \
+  --approve
 ```
-docker build -t 1nfosecsingh/demo-app:v1 .
+
+### Step 4: Create AWS Resources
+
+```bash
+# Create DynamoDB tables
+aws dynamodb create-table \
+  --table-name assignments \
+  --attribute-definitions AttributeName=id,AttributeType=S \
+  --key-schema AttributeName=id,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST \
+  --region us-east-1
+
+aws dynamodb create-table \
+  --table-name answers \
+  --attribute-definitions \
+    AttributeName=student_id,AttributeType=S \
+    AttributeName=assignment_question_id,AttributeType=S \
+    AttributeName=score,AttributeType=N \
+  --key-schema \
+    AttributeName=student_id,KeyType=HASH \
+    AttributeName=assignment_question_id,KeyType=RANGE \
+  --global-secondary-indexes \
+    "IndexName=assignment_question_id-index,KeySchema=[{AttributeName=assignment_question_id,KeyType=HASH},{AttributeName=score,KeyType=RANGE}],Projection={ProjectionType=ALL}" \
+  --billing-mode PAY_PER_REQUEST \
+  --region us-east-1
+
+# Create S3 bucket
+aws s3 mb s3://mcq-project --region us-east-1
+
+# Create ECR repository
+aws ecr create-repository --repository-name cloudage-app --region us-east-1
 ```
-Note: you need to change the name of your image, according to your dockerhub username.
 
-2. Lets create container with image.
- ```
- docker run -d -p 5000:5000 --name=demo-app demo-app
- ```
+### Step 5: Install Argo CD
 
- If everything is working fine and you are able to access application with https://localhost:5000 then next step is to write a GitHub Pipeline.
+```bash
+# Install Argo CD
+kubectl create namespace argocd
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
 
-## CI Pipeline with GitHub Actions
-1. Create a directory inside your project.
-    ```
-    mkdir -p .github/Workflows
-    ```
-2. Create your first pipeline for TEST and BUILD the image. make sure it should be yaml file
-    ```
-    name: Test and Build
+# Wait for Argo CD to be ready
+kubectl wait --for=condition=Ready pods --all -n argocd --timeout=300s
 
-    on:
-    push:
-        branches:
-        - master
-        paths:
-        - '**/*'
+# Get admin password
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d; echo
 
-    jobs:
-    build:
-        runs-on: ubuntu-latest
-
-        steps:
-        #Setting up environment
-        - name: Checkout code
-            uses: actions/checkout@v2
-
-        - name: Setup Python
-            uses: actions/setup-python@v2
-            with:
-            python-version: '3.9'
-
-        - name: Docker Setup
-            uses: docker/setup-buildx-action@v2
-
-        - name: Install dependencies
-            run: |
-            python -m pip install --upgrade pip
-            pip install -r requirements.txt
-            pip install flake8
-            
-        # Test the Code
-        - name: Run Linting tests
-            run: |
-            flake8 --ignore=E501,F401 .
-        
-        - name: Docker Credentials
-            uses: docker/login-action@v2
-            with:
-            username: ${{ secrets.DOCKER_USERNAME }}
-            password: ${{ secrets.DOCKER_PASSWORD }}
-        
-        - name: Docker tag
-            id: version
-            run: |
-            VERSION=v$(date +"%Y%m%d%H%M%S")
-            echo "VERSION=$VERSION" >> $GITHUB_ENV
-
-        # Build the Docker Image
-        - name: Build Docker Image
-            run: |
-            docker build . -t 1nfosecsingh/demo-app:${{ env.VERSION }} 
-        
-        # Push the Docker Image
-        - name: Push Docker Image
-            run: |
-            docker push 1nfosecsingh/demo-app:${{ env.VERSION }}
-        
-        # UPdate the K8s Manifest Files
-        - name: Update K8s Manifests
-            run: |
-            cat deploy/deploy.yaml
-            sed -i "s|image: 1nfosecsingh/demo-app:.*|image: 1nfosecsingh/demo-app:${{ env.VERSION }}|g" deploy/deploy.yaml
-            cat deploy/deploy.yaml
-
-        # Update Github
-        - name: Commit the changes
-            run: |
-            git config --global user.email "<infosecsingh@gmail.com>"
-            git config --global user.name "GitHub Actions Bot"
-            git add deploy/deploy.yaml
-            git commit -m "Update deploy.yaml with new image version - ${{ env.VERSION }}"
-            git remote set-url origin https://github-actions:${{ secrets.GITHUB_TOKEN }}@github.com/infosecsingh/Flask-App-GitHub-Actions-ArgoCD.git
-            git push origin master
-    ```
-
-1. Make sure setup your docker Personal Access token into github repo. 
-
-## Setup ArgoCD in Minikube
-
-Note: You can setup Argo CD in any cluster, instructions are same. 
-
-- First install Minikube:
-    Installation guide for installing Minikube. 
-    [Minikube.sigs.k8s.io](https://minikube.sigs.k8s.io/docs/start/?arch=%2Fwindows%2Fx86-64%2Fstable%2F.exe+download)
-
----
-- Install Argo CD
-    ```
-    kubectl create namespace argocd
-    kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml 
-    ```
-
-- Verify if ArgoCD is running:
-    ```
-    kubectl get all -n argocd
-    ```
-    Output
-    ```    
-        NAME                                                    READY   STATUS    RESTARTS       AGE
-    pod/argocd-application-controller-0                     1/1     Running   0              2m57s
-    pod/argocd-applicationset-controller-64f6bd6456-6jv2z   1/1     Running   0              2m57s
-    pod/argocd-dex-server-5fdcd9df8b-6ctpr                  1/1     Running   1 (2m2s ago)   2m57s
-    pod/argocd-notifications-controller-778495d96f-rhj9k    1/1     Running   0              2m57s
-    pod/argocd-redis-69fd8bd669-5cwkf                       1/1     Running   0              2m57s
-    pod/argocd-repo-server-75567c944-mth62                  1/1     Running   0              2m57s
-    pod/argocd-server-5c768cdd96-6rpdp                      1/1     Running   0              2m57s
-
-    NAME                                              TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)                      AGE
-    service/argocd-applicationset-controller          ClusterIP   10.96.214.139    <none>        7000/TCP,8080/TCP            2m57s
-    service/argocd-dex-server                         ClusterIP   10.105.242.131   <none>        5556/TCP,5557/TCP,5558/TCP   2m57s
-    service/argocd-metrics                            ClusterIP   10.108.182.252   <none>        8082/TCP                     2m57s
-    service/argocd-notifications-controller-metrics   ClusterIP   10.106.4.82      <none>        9001/TCP                     2m57s
-    service/argocd-redis                              ClusterIP   10.98.222.183    <none>        6379/TCP                     2m57s
-    service/argocd-repo-server                        ClusterIP   10.103.237.141   <none>        8081/TCP,8084/TCP            2m57s
-    service/argocd-server                             ClusterIP   10.107.245.182   <none>        80/TCP,443/TCP               2m57s
-    service/argocd-server-metrics                     ClusterIP   10.108.248.213   <none>        8083/TCP                     2m57s
-
-    NAME                                               READY   UP-TO-DATE   AVAILABLE   AGE
-    deployment.apps/argocd-applicationset-controller   1/1     1            1           2m57s
-    deployment.apps/argocd-dex-server                  1/1     1            1           2m57s
-    deployment.apps/argocd-notifications-controller    1/1     1            1           2m57s
-    deployment.apps/argocd-redis                       1/1     1            1           2m57s
-    deployment.apps/argocd-repo-server                 1/1     1            1           2m57s
-    deployment.apps/argocd-server                      1/1     1            1           2m57s
-
-    NAME                                                          DESIRED   CURRENT   READY   AGE
-    replicaset.apps/argocd-applicationset-controller-64f6bd6456   1         1         1       2m57s
-    replicaset.apps/argocd-dex-server-5fdcd9df8b                  1         1         1       2m57s
-    replicaset.apps/argocd-notifications-controller-778495d96f    1         1         1       2m57s
-    replicaset.apps/argocd-redis-69fd8bd669                       1         1         1       2m57s
-    replicaset.apps/argocd-repo-server-75567c944                  1         1         1       2m57s
-    replicaset.apps/argocd-server-5c768cdd96                      1         1         1       2m57s
-
-    NAME                                             READY   AGE
-    statefulset.apps/argocd-application-controller   1/1     2m57s
-    ```
-
----
-- Access ArgoCD With configuring NodePort 
-    ```
-    kubectl patch svc argocd-server -n argocd -p '{"spec": {"type": "NodePort"}}'
-    ```
-- Verify if ArgoCD server running as NodePort.
-   ```
-   kubectl get svc -n argocd
-   ``` 
-   Output
-   ```
-   NAME                                      TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)                      AGE
-    argocd-applicationset-controller          ClusterIP   10.96.214.139    <none>        7000/TCP,8080/TCP            7m17s
-    argocd-dex-server                         ClusterIP   10.105.242.131   <none>        5556/TCP,5557/TCP,5558/TCP   7m17s
-    argocd-metrics                            ClusterIP   10.108.182.252   <none>        8082/TCP                     7m17s
-    argocd-notifications-controller-metrics   ClusterIP   10.106.4.82      <none>        9001/TCP                     7m17s
-    argocd-redis                              ClusterIP   10.98.222.183    <none>        6379/TCP                     7m17s
-    argocd-repo-server                        ClusterIP   10.103.237.141   <none>        8081/TCP,8084/TCP            7m17s
-    argocd-server                             NodePort    10.107.245.182   <none>        80:30692/TCP,443:31365/TCP   7m17s
-    argocd-server-metrics                     ClusterIP   10.108.248.213   <none>        8083/TCP                     7m17s
-   ```
-- Grab ArgoCD secret for accessing UI
-   ```
-   kubectl get secrets -n argocd argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d
-   ```
-
-- Start Minkube Service. 
-   ```
-    minikube service argocd-server -n argocd
-    ```
-    Output
-    ```
-    |-----------|---------------|-------------|-----------------------------|
-    | NAMESPACE |     NAME      | TARGET PORT |             URL             |
-    |-----------|---------------|-------------|-----------------------------|
-    | argocd    | argocd-server | http/80     | http://172.29.213.129:30692 |
-    |           |               | https/443   | http://172.29.213.129:31365 |
-    |-----------|---------------|-------------|-----------------------------|
-    [argocd argocd-server http/80
-    https/443 http://172.29.213.129:30692
-    http://172.29.213.129:31365]
-
-   ```
-   Username: admin
-   password: secret(please check above command)
-
-   ![alt text](imgs/ui.png)
-
----
-Setup our Continous deployment. 
-
-- Select New App.
-![alt text](imgs/setting1.png)
-![alt text](imgs/setting2.png)
----
-- Syncing your manifests files:
-![alt text](imgs/sync.png)
----
-
-- Successfully Deployed our app:
-![alt text](imgs/deployed.png)
----
-Access Application with below command.
+# Access Argo CD UI (in a new terminal)
+kubectl port-forward svc/argocd-server -n argocd 8080:443
+# Open https://localhost:8080 and login with admin/<password>
 ```
-minikube service list
-```
-Output
-```
-|-------------|-----------------------------------------|--------------|-----------------------------|
-|  NAMESPACE  |                  NAME                   | TARGET PORT  |             URL             |
-|-------------|-----------------------------------------|--------------|-----------------------------|
-| argocd      | argocd-applicationset-controller        | No node port |                             |
-| argocd      | argocd-dex-server                       | No node port |                             |
-| argocd      | argocd-metrics                          | No node port |                             |
-| argocd      | argocd-notifications-controller-metrics | No node port |                             |
-| argocd      | argocd-redis                            | No node port |                             |
-| argocd      | argocd-repo-server                      | No node port |                             |
-| argocd      | argocd-server                           | http/80      | http://172.29.213.129:30692 |
-|             |                                         | https/443    | http://172.29.213.129:31365 |
-| argocd      | argocd-server-metrics                   | No node port |                             |
-| default     | kubernetes                              | No node port |                             |
-| default     | weather-check-service                   |         5000 | http://172.29.213.129:30008 |
-| kube-system | kube-dns                                | No node port |                             |
-|-------------|-----------------------------------------|--------------|-----------------------------|
-```
----
-Application running on http://172.29.213.129:30008
 
-![alt text](imgs/application.png)
+**Detailed instructions**: [docs/argocd-setup.md](docs/argocd-setup.md)
+
+### Step 6: Configure GitHub Secrets
+
+Go to https://github.com/YogeshAbnave/eks-pythpn-deployment/settings/secrets/actions
+
+1. Create IAM user for GitHub Actions:
+```bash
+aws iam create-user --user-name github-actions-cloudage
+```
+
+2. Attach ECR permissions (see [docs/github-secrets.md](docs/github-secrets.md))
+
+3. Create access keys:
+```bash
+aws iam create-access-key --user-name github-actions-cloudage
+```
+
+4. Add secrets to GitHub:
+   - Go to repository **Settings** → **Secrets and variables** → **Actions**
+   - Add `AWS_ACCESS_KEY_ID`
+   - Add `AWS_SECRET_ACCESS_KEY`
+
+**Detailed instructions**: [docs/github-secrets.md](docs/github-secrets.md)
+
+### Step 7: Deploy Application
+
+```bash
+# Create Argo CD application
+kubectl apply -f argocd/application.yaml
+
+# Push code to GitHub (triggers CI/CD)
+git add .
+git commit -m "Initial deployment"
+git push origin main
+```
+
+### Step 8: Access Your Application
+
+```bash
+# Wait for LoadBalancer to be provisioned (2-3 minutes)
+kubectl get svc cloudage-service -n cloudage --watch
+
+# Get application URL
+kubectl get svc cloudage-service -n cloudage -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+```
+
+Access your application at: `http://<LOAD_BALANCER_URL>`
+
+## 🔄 CI/CD Pipeline
+
+The deployment pipeline is fully automated:
+
+1. **Push to GitHub** → Triggers GitHub Actions workflow
+2. **Build Docker Image** → Creates container from source code
+3. **Push to ECR** → Stores image in Amazon ECR
+4. **Update Manifest** → Updates deployment.yaml with new image tag
+5. **Argo CD Sync** → Automatically deploys to EKS
+6. **Health Checks** → Verifies deployment success
+
+### Making Changes
+
+Simply push code changes to the main branch:
+
+```bash
+# Make your changes
+git add .
+git commit -m "Your changes"
+git push origin main
+
+# GitHub Actions will automatically:
+# 1. Build new Docker image
+# 2. Push to ECR
+# 3. Update Kubernetes manifests
+# 4. Argo CD will deploy to EKS
+```
+
+## 🧪 Local Development
+
+### Run Locally
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Run Streamlit app
+streamlit run Home.py
+```
+
+### Build Docker Image Locally
+
+```bash
+docker build -t cloudage-app:local .
+docker run -p 8501:80 cloudage-app:local
+```
+
+## 📊 Monitoring
+
+### Check Application Status
+
+```bash
+# Check pods
+kubectl get pods -n cloudage
+
+# Check service
+kubectl get svc -n cloudage
+
+# View logs
+kubectl logs -n cloudage -l app=cloudage-education --tail=100
+
+# Check Argo CD sync status
+kubectl get applications -n argocd
+```
+
+### Argo CD Dashboard
+
+Access at: https://localhost:8080 (if using port-forward)
+
+View:
+- Sync status
+- Application health
+- Resource tree
+- Deployment history
+
+## 🔧 Troubleshooting
+
+### Application not accessible
+
+```bash
+# Check pod status
+kubectl get pods -n cloudage
+
+# Check pod logs
+kubectl logs -n cloudage <POD_NAME>
+
+# Check service
+kubectl describe svc cloudage-service -n cloudage
+```
+
+### Image pull errors
+
+```bash
+# Verify ECR repository
+aws ecr describe-repositories --repository-names cloudage-app --region us-east-1
+
+# Check image exists
+aws ecr list-images --repository-name cloudage-app --region us-east-1
+```
+
+### Argo CD sync issues
+
+```bash
+# Check application status
+kubectl get application cloudage-app -n argocd
+
+# View sync errors
+kubectl describe application cloudage-app -n argocd
+
+# Manual sync
+kubectl patch application cloudage-app -n argocd --type merge -p '{"operation":{"initiatedBy":{"username":"admin"},"sync":{"revision":"HEAD"}}}'
+```
+
+## 🗂️ Project Structure
+
+```
+eks-python-deployment/
+├── .github/
+│   └── workflows/
+│       └── build-and-push.yml    # CI/CD pipeline
+├── k8s/
+│   ├── namespace.yaml            # Kubernetes namespace
+│   ├── configmap.yaml            # Application configuration
+│   ├── secret.yaml               # Secrets template
+│   ├── serviceaccount.yaml       # Service account with IAM role
+│   ├── deployment.yaml           # Application deployment
+│   └── service.yaml              # LoadBalancer service
+├── argocd/
+│   └── application.yaml          # Argo CD application definition
+├── docs/
+│   ├── eks-setup.md              # EKS cluster setup guide
+│   ├── argocd-setup.md           # Argo CD installation guide
+│   ├── github-secrets.md         # GitHub secrets configuration
+│   └── iam-policy.json           # IAM policy for pods
+├── components/
+│   ├── Parameter_store.py        # Configuration helpers
+│   └── ui_template.py            # UI components
+├── pages/
+│   ├── 1_Create_Assignments.py   # Teacher interface
+│   ├── 2_Show_Assignments.py     # Assignment browser
+│   └── 3_Complete_Assignments.py # Student interface
+├── Home.py                       # Main application entry
+├── requirements.txt              # Python dependencies
+├── Dockerfile                    # Container definition
+└── README.md                     # This file
+```
+
+## 🔐 Security
+
+- IAM Roles for Service Accounts (IRSA) for pod authentication
+- No hardcoded AWS credentials in code
+- GitHub Secrets for CI/CD credentials
+- Network policies for pod isolation
+- Resource limits to prevent resource exhaustion
+
+## 💰 Cost Estimation
+
+Approximate monthly costs (us-east-1):
+
+- **EKS Cluster**: $73/month
+- **EC2 Instances** (2x t3.medium): ~$60/month
+- **Load Balancer**: ~$16/month
+- **DynamoDB**: Pay per request (minimal for testing)
+- **S3**: Pay per storage and requests (minimal)
+- **ECR**: $0.10/GB/month
+- **Bedrock**: Pay per API call
+
+**Total**: ~$150-200/month for development/testing
+
+## 🧹 Cleanup
+
+To avoid ongoing charges, delete all resources:
+
+```bash
+# Delete Argo CD application
+kubectl delete -f argocd/application.yaml
+
+# Delete EKS cluster
+eksctl delete cluster --name cloudage-cluster --region us-east-1
+
+# Delete DynamoDB tables
+aws dynamodb delete-table --table-name assignments --region us-east-1
+aws dynamodb delete-table --table-name answers --region us-east-1
+
+# Delete S3 bucket
+aws s3 rb s3://mcq-project --force --region us-east-1
+
+# Delete ECR repository
+aws ecr delete-repository --repository-name cloudage-app --force --region us-east-1
+
+# Delete IAM resources
+aws iam delete-policy --policy-arn arn:aws:iam::992167236365:policy/CloudAgeEKSPodPolicy
+```
+
+## 📚 Documentation
+
+- [EKS Setup Guide](docs/eks-setup.md)
+- [Argo CD Setup Guide](docs/argocd-setup.md)
+- [GitHub Secrets Configuration](docs/github-secrets.md)
+- [IAM Policy](docs/iam-policy.json)
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Push to GitHub
+5. CI/CD will automatically deploy to your EKS cluster
+
+## 📝 License
+
+This project is for educational purposes.
+
+## 🆘 Support
+
+For issues or questions:
+1. Check the troubleshooting section
+2. Review documentation in `docs/` folder
+3. Check Argo CD UI for deployment status
+4. Review GitHub Actions logs for CI/CD issues
+
+
+
+
+# 1. Create EKS cluster (10 min)
+eksctl create cluster --name cloudage-cluster --region us-east-1 --nodegroup-name cloudage-nodes --node-type t3.medium --nodes 2 --managed
+
+# 2. Setup IAM (2 min)
+eksctl utils associate-iam-oidc-provider --cluster cloudage-cluster --region us-east-1 --approve
+aws iam create-policy --policy-name CloudAgeEKSPodPolicy --policy-document file://docs/iam-policy.json
+eksctl create iamserviceaccount --name cloudage-sa --namespace cloudage --cluster cloudage-cluster --region us-east-1 --attach-policy-arn arn:aws:iam::992167236365:policy/CloudAgeEKSPodPolicy --role-name cloudage-eks-pod-role --approve
+
+# 3. Create AWS resources (1 min)
+aws dynamodb create-table --table-name assignments --attribute-definitions AttributeName=id,AttributeType=S --key-schema AttributeName=id,KeyType=HASH --billing-mode PAY_PER_REQUEST --region us-east-1
+aws dynamodb create-table --table-name answers --attribute-definitions AttributeName=student_id,AttributeType=S AttributeName=assignment_question_id,AttributeType=S AttributeName=score,AttributeType=N --key-schema AttributeName=student_id,KeyType=HASH AttributeName=assignment_question_id,KeyType=RANGE --global-secondary-indexes "IndexName=assignment_question_id-index,KeySchema=[{AttributeName=assignment_question_id,KeyType=HASH},{AttributeName=score,KeyType=RANGE}],Projection={ProjectionType=ALL}" --billing-mode PAY_PER_REQUEST --region us-east-1
+aws s3 mb s3://mcq-project --region us-east-1
+aws ecr create-repository --repository-name cloudage-app --region us-east-1
+
+# 4. Install Argo CD (2 min)
+kubectl create namespace argocd
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+kubectl wait --for=condition=Ready pods --all -n argocd --timeout=300s
+
+# 5. Configure GitHub Secrets (add AWS credentials)
+
+# 6. Deploy!
+sed -i 's/YOUR_USERNAME/your-github-username/g' argocd/application.yaml
+kubectl apply -f argocd/application.yaml
+git push origin main

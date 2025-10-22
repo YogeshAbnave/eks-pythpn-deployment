@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cloudage
+  labels:
+    app: cloudage-education
+    environment: production
