@@ -71,9 +71,10 @@ jobs:
           git config --global user.email "iamyogeshabnave@gmail.com"
           git config --global user.name "YogeshAbnave"
           git add deploy/deploy.yaml
-          git commit -m "Update deploy.yaml with new image version - ${{ env.VERSION }}"
+          git commit -m "Update deploy.yaml with new image version - ${{ env.VERSION }}" || echo "No changes to commit"
           git remote set-url origin https://github-actions:${{ secrets.GITHUB_TOKEN }}@github.com/YogeshAbnave/eks-pythpn-deployment.git
           git push origin main
+
 
       # https://github.com/YogeshAbnave/eks-pythpn-deployment.git
 
