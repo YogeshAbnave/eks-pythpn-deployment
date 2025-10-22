@@ -7,7 +7,7 @@ WORKDIR /app
 COPY . . 
 
 # Install any needed packages specified in requirements.txt
-RUN pip install -r requirements.txt
+RUN pip install --timeout 300 --retries 5 -r requirements.txt
 
 #Expose the port
 EXPOSE 5000
